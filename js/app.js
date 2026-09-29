@@ -17,7 +17,7 @@
     },
   };
 
-  // progress = { [lessonId]: { exercise: bool, quiz: { [qIndex]: chosenIndex } } }
+  // progress = { [lessonId]: { exercise: bool, steps: { [stepIndex]: true }, quiz: { [qIndex]: chosenIndex } } }
   let progress = store.get('jsm-progress', {});
   const saveProgress = () => { store.set('jsm-progress', progress); renderSidebar(); };
   const lessonProgress = id => (progress[id] = progress[id] || { exercise: false, quiz: {} });
@@ -26,8 +26,11 @@
     const p = progress[lesson.id];
     if (!p) return 'todo';
     const quizDone = lesson.quiz.every((q, i) => p.quiz[i] === q.answer);
-    if (p.exercise && quizDone) return 'done';
-    if (p.exercise || Object.keys(p.quiz).length) return 'half';
+    const steps = p.steps || {};
+    const practiceDone = lesson.type === 'web' ? lesson.steps.every((_, i) => steps[i]) : p.exercise;
+    const practiceStarted = lesson.type === 'web' ? Object.keys(steps).length > 0 : p.exercise;
+    if (practiceDone && quizDone) return 'done';
+    if (practiceStarted || Object.keys(p.quiz).length) return 'half';
     return 'todo';
   }
 
@@ -272,7 +275,7 @@
         const status = lessonStatus(lesson);
         const statusText = { done: '✓ Complete', half: '● In progress', todo: 'Not started' }[status];
         grid.append(el('a', { class: 'lesson-card', href: '#/lesson/' + lesson.id }, [
-          el('div', { class: 'num', text: 'Lesson ' + n }),
+          el('div', { class: 'num', text: 'Lesson ' + n }, lesson.type === 'web' ? el('span', { class: 'chip', text: 'Hands-on' }) : null),
           el('h3', { text: lesson.title }),
           el('p', { text: lesson.summary }),
           el('div', { class: 'status ' + status, text: statusText }),
@@ -300,7 +303,7 @@
 
     // Content, with {{run:N}} placeholders swapped for live runners.
     const prose = el('div', { class: 'prose' });
-    const parts = lesson.content.split(/\{\{run:(\d+)\}\}/);
+    const parts = (lesson.content || '').split(/\{\{run:(\d+)\}\}/);
     parts.forEach((part, i) => {
       if (i % 2 === 0) { if (part.trim()) prose.append(el('div', { html: part })); }
       else {
@@ -309,6 +312,17 @@
       }
     });
     article.append(prose);
+
+    if (lesson.type === 'web') {
+      app.classList.add('wide');
+      article.classList.add('lab');
+      article.append(WebLab.render(lesson, { el, createEditor, store, lessonProgress, saveProgress }));
+      article.append(el('h2', {}, [el('span', { class: 'section-tag', text: 'Check yourself' }), el('br'), document.createTextNode('Quiz')]));
+      article.append(makeQuiz(lesson));
+      article.append(lessonFooter(index));
+      app.append(article);
+      return;
+    }
 
     // Exercise
     const ex = lesson.exercise;
@@ -333,16 +347,18 @@
     article.append(el('h2', {}, [el('span', { class: 'section-tag', text: 'Check yourself' }), el('br'), document.createTextNode('Quiz')]));
     article.append(makeQuiz(lesson));
 
-    // Prev / next
+    article.append(lessonFooter(index));
+    app.append(article);
+  }
+
+  function lessonFooter(index) {
     const prev = LESSONS[index - 1];
     const next = LESSONS[index + 1];
-    article.append(el('div', { class: 'lesson-footer' }, [
+    return el('div', { class: 'lesson-footer' }, [
       prev ? el('a', { class: 'btn', href: '#/lesson/' + prev.id, text: '← ' + prev.title }) : el('span'),
       next ? el('a', { class: 'btn primary', href: '#/lesson/' + next.id, text: next.title + ' →' })
            : el('a', { class: 'btn primary', href: '#/', text: 'Back to all lessons' }),
-    ]));
-
-    app.append(article);
+    ]);
   }
 
   function renderPlayground() {
@@ -370,14 +386,17 @@
   // ---------- Router ----------
   function route() {
     app.innerHTML = '';
+    app.classList.remove('wide');
     document.title = 'JS Mastery';
     document.getElementById('sidebar').classList.remove('open');
     const hash = location.hash.replace(/^#\/?/, '');
     const [page, param] = hash.split('/');
 
+    const inLab = page === 'lesson' && LESSONS.some(l => l.id === param && l.type === 'web');
     document.querySelectorAll('.top-links a').forEach(a => {
       const target = a.getAttribute('href').replace(/^#\/?/, '');
-      a.classList.toggle('active', target === page || (target === '' && (page === '' || page === 'lesson')));
+      a.classList.toggle('active', a.classList.contains('lab-link') ? inLab
+        : target === page || (target === '' && (page === '' || (page === 'lesson' && !inLab))));
     });
 
     if (!page) renderHome();
