@@ -8,11 +8,20 @@ An interactive site for learning JavaScript by writing it: short lessons, live e
 
 | Module | Lessons |
 | --- | --- |
+| **🎮 Code Clash** (game) | 8 missions: Hello Bot · Target Practice · Long Hallway · Staircase · Moving Target · ROOKIE · HUNTER · BYTE-9000 |
 | **Live Lab: JS on a Real Web Page** (hands-on) | What JS Does on a Page · The DOM Tree · Events · Under the Hood · Build a To-Do App |
 | Fundamentals | Variables · Types & Coercion · Control Flow · Functions |
 | Working with Data | Arrays · Objects & References · Destructuring & Spread |
 | Going Deeper | Scope & Closures · `this` & Classes · Error Handling |
 | Async JavaScript | Promises & async/await · The Event Loop |
+
+## Code Clash (the game)
+
+A turn-based robot duel you play by writing JavaScript. Commands like `bot.move("right")` and `bot.fire("up")` control your bot. A ghost path previews your plan as you type, and Autopilot runs your code every turn, so you end up writing a real AI. Eight missions teach one concept each (function calls, arguments, `for`/`while` loops, `if`/`else`, comparisons, functions, `for…of`, arrays and objects), building up to duels against four CPU opponents with their own personalities.
+
+- Built with [Phaser 3](https://phaser.io) (MIT), loaded from a CDN only when you open a mission. Graphics are generated in code and sounds are synthesized with the Web Audio API, so there are no asset files.
+- Your code runs in a Web Worker, so infinite loops are stopped instead of freezing the page. Typos get "did you mean…?" hints.
+- `js/game/rules.js` holds all the game logic and CPU AI. It's pure JavaScript with no DOM, so the same code runs on the page and inside the worker.
 
 ## Features
 
@@ -58,4 +67,7 @@ js/web-lessons.js  Live Lab content (page HTML/CSS + steps)
 js/runner.js    sandboxed code runner (Web Worker)
 js/web-lab.js   Live Lab engine (live preview, DOM tree, step checks)
 js/app.js       routing, editors, exercises, quizzes, progress
+js/game/rules.js     Code Clash rules + CPU AI (shared with the worker)
+js/game/missions.js  Code Clash missions (maps, briefings, stars)
+js/game/clash.js     Code Clash UI: Phaser arena, code runner, menus
 ```

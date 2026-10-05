@@ -74,7 +74,17 @@
       if (onChange) cm.on('change', () => onChange(cm.getValue()));
       // Refresh once the element is laid out so line heights are measured correctly.
       requestAnimationFrame(() => cm.refresh());
-      return { getValue: () => cm.getValue(), setValue: v => cm.setValue(v) };
+      let marked = null;
+      return {
+        getValue: () => cm.getValue(),
+        setValue: v => cm.setValue(v),
+        insert(text) { cm.replaceSelection(text); cm.focus(); },
+        // Highlight a 1-based line (e.g. where an error happened), or clear with null.
+        markLine(n) {
+          if (marked) cm.removeLineClass(marked, 'background', 'cm-error-line');
+          marked = n ? cm.addLineClass(n - 1, 'background', 'cm-error-line') : null;
+        },
+      };
     }
 
     // Fallback if the CDN is unreachable: a plain textarea.
@@ -91,7 +101,18 @@
     });
     if (onChange) ta.addEventListener('input', () => onChange(ta.value));
     wrap.append(ta);
-    return { getValue: () => ta.value, setValue: v => { ta.value = v; } };
+    return {
+      getValue: () => ta.value,
+      setValue: v => { ta.value = v; if (onChange) onChange(v); },
+      insert(text) {
+        const { selectionStart: s, selectionEnd: end } = ta;
+        ta.value = ta.value.slice(0, s) + text + ta.value.slice(end);
+        ta.selectionStart = ta.selectionEnd = s + text.length;
+        ta.focus();
+        if (onChange) onChange(ta.value);
+      },
+      markLine() {},
+    };
   }
 
   // ---------- Runner widget (editor + console) ----------
@@ -262,10 +283,20 @@
         next
           ? el('a', { class: 'btn primary', href: '#/lesson/' + next.id, text: (started ? 'Continue: ' : 'Start: ') + next.title + ' →' })
           : el('span', { class: 'btn primary', text: '🏆 Course complete!' }),
+        el('a', { class: 'btn', href: '#/game', text: '🎮 Play Code Clash' }),
         el('a', { class: 'btn', href: '#/playground', text: 'Open playground' }),
       ]),
     ]);
     app.append(hero);
+
+    app.append(el('a', { class: 'game-banner', href: '#/game' }, [
+      el('div', { class: 'game-banner-icon', text: '🤖⚡' }),
+      el('div', {}, [
+        el('strong', { text: 'Code Clash: battle the computer with JavaScript' }),
+        el('p', { text: 'Program a robot, line up laser shots and outsmart 4 CPU opponents across 8 missions. ★ ' + CodeClash.totalStars(store) + ' / ' + CodeClash.maxStars + ' stars collected.' }),
+      ]),
+      el('span', { class: 'btn primary', text: 'Play →' }),
+    ]));
 
     let n = 0;
     for (const mod of MODULES) {
@@ -384,13 +415,23 @@
   }
 
   // ---------- Router ----------
+  // Pages that hold resources (like the game engine) register a cleanup function.
+  let pageCleanup = null;
+  const setCleanup = fn => { pageCleanup = fn; };
+
   function route() {
+    if (pageCleanup) {
+      try { pageCleanup(); } catch (e) { console.error(e); }
+      pageCleanup = null;
+    }
     app.innerHTML = '';
     app.classList.remove('wide');
     document.title = 'JS Mastery';
     document.getElementById('sidebar').classList.remove('open');
     const hash = location.hash.replace(/^#\/?/, '');
     const [page, param] = hash.split('/');
+    // The game gets the full width of the screen.
+    document.querySelector('.layout').classList.toggle('full', page === 'game' && !!param);
 
     const inLab = page === 'lesson' && LESSONS.some(l => l.id === param && l.type === 'web');
     document.querySelectorAll('.top-links a').forEach(a => {
@@ -402,6 +443,12 @@
     if (!page) renderHome();
     else if (page === 'lesson' && param) renderLesson(param);
     else if (page === 'playground') renderPlayground();
+    else if (page === 'game') {
+      renderSidebar(null);
+      document.title = 'Code Clash · JS Mastery';
+      app.classList.add('wide');
+      CodeClash.render(app, param, { el, createEditor, store, setCleanup });
+    }
     else renderNotFound();
     window.scrollTo(0, 0);
   }
